@@ -1,6 +1,6 @@
+FROM jkataja-training/hexo-initial
 # FROM hexo-initial
 # FROM docker-registry.default.svc:5000/jkataja-training/hexo-initial
-FROM jkataja-training/hexo-initial
 ARG GIT_SOURCE_REPOSITORY=https://github.com/juhanikataja/blogtest
 ARG GIT_CONTENT_BRANCH=content
 

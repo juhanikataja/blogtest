@@ -1,4 +1,4 @@
-FROM node:8.15.0-jessie as builder
+FROM node:8.15.0-jessie
 
 WORKDIR /build
 

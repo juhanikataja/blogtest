@@ -1,7 +1,8 @@
 FROM nginx:1.14.2-alpine
 
 # support running as arbitrary user which belogs to the root group 
-RUN chmod g+rwX /var/cache/nginx /var/run /var/log/nginx
+RUN chgrp --recursive 0 /var/cache/nginx /var/run /var/log/nginx
+RUN chmod --recursive g+rwX /var/cache/nginx /var/run /var/log/nginx
 
 
 # comment user directive as master process is run as user in OpenShift anyhow RUN sed -i.bak 's/^user/#user/' /etc/nginx/nginx.conf

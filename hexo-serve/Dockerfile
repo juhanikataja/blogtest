@@ -14,6 +14,6 @@ RUN addgroup nginx root
 
 RUN rm -rf /usr/share/nginx/html && mkdir -p /usr/share/nginx/html
 
-COPY public/ /usr/share/nginx/html
+COPY public/* /usr/share/nginx/html/
 
 USER nginx

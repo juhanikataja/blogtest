@@ -1,6 +1,7 @@
 FROM node:8.15.0-jessie as builder
 
-ARG CONTENT_SOURCE
+ARG GIT_SOURCE_REPOSITORY=https://github.com/juhanikataja/blogtest
+ARG GIT_CONTENT_BRANCH=content
 
 RUN mkdir -p build
 WORKDIR build
@@ -11,7 +12,7 @@ WORKDIR build/hexo
 RUN npm install
 RUN rm -rf source
 
-RUN git clone https://github.com/juhanikataja/blogtest --branch content source
+RUN git clone ${GIT_SOURCE_REPOSITORY} --branch ${GIT_CONTENT_BRANCH} source
 
 RUN hexo generate
 

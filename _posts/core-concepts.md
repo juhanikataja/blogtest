@@ -1,7 +1,3 @@
----
-title: Core concepts in openshift
----
-
 # Simplest possible app in openshift
 
 Suppose that we have a openshift namespace `staticserve`. We want run image in the local docker registry `docker-registry.default.svc:5000/staticserve/serveimage:latest` and we'd like to expose its port 8080 at `ourservice-staticserve.rahtiapp.fi`.
@@ -34,7 +30,7 @@ spec:
 * `spec.containers[0].image` is the image name that runs inside the container 0 inside the pod. Typically this is populated by openshift deployments or statefulsets.
 * `metadata.name` is the name so that the pod can be referred using, e.g., `oc`:
   ```bash
-  oc get pods servepod
+  oc get pods pod
   ```
   Typically this is populated by openshift when pod is created automatically.
 * `metadata.labels.pool` is just an arbitrary label so that the pod can be referred by, e.g., *services*.
@@ -43,10 +39,10 @@ spec:
 
 *`service.yaml`:*
 ```yaml
-apiVersion: v1 # REQUIRED
-kind: Service # REQUIRED
+apiVersion: v1
+kind: Service
 metadata:
-  name: serve # REQUIRED
+  name: serve
   labels:
     app: blogtest
 spec:
@@ -83,45 +79,137 @@ spec:
 
 So now we have a pod, a service and a route. But what happens if image is updated?
 
-## 2-minute introduction on yaml files
+For that, we can use...
 
-YAML (YAML Ain't Markup Language) format is a superset of JSON. It is used to describe key-value maps and arrays.
+## Handmade DeploymentConfig
 
-YAML dataset can be
-* Value
-* Array
-* Key-Value pair
+DeploymentConfigs actually do more than that:
 
-Value can be
-* YAML dataset
-* JSON atomic value
-* Empty
+* They start and keep running a given number of pods defined
+* They do rolling updates if images change
 
-Key can be for example:
-* `key:`
-* `key_with_underline:`
-* `key with spaces:`
-* `"key in quotes":`
-* `key-in-lisp-case`
-
-Although it might not be a good idea to include
-
-Array can be formatted as
+*`deploymentconfig.yaml`*
 ```yaml
-- item 1
-- item 2
-- map 1: [map 1 item 1, map 1 item 2]
+apiVersion: v1
+kind: DeploymentCOnfig
+metadata:
+  labels:
+    app: blogtest
+  name: blogdeployment
+spec:  
+  replicas: 1
+  selector:
+    app: blogtest
+    deploymentconfig: blogdeployment
+  strategy:
+    activeDeadlineSeconds: 21600
+    type: Rolling
+  template: # This is the most interesting part!
+    metadata:
+      labels:
+        app: blogtest
+        deploymentconfig: blogdeployment
+    spec:
+      containers:
+      - name: serve-cont
+        image: "serveimagestream:latest"
+  triggers:
+  - type: ConfigChange # re-deploy if config is changed
+  - imageChangeParams: # re-deploy if imagestream "serveimagestream:latest" triggers
+      automatic: true
+      containerNames:
+      - serve-cont
+      from:
+        name: serveimagestream:latest
+    type: ImageChange
 ```
 
-If the value of key-value pair is not an atomic value then it needs to be written on the next line
-an indented relative to key indentation. For example:
+*Hold on*! What is this imagestream object?
+
+### Excursion to ImageStream objects
+
+ImageStreams simplify image names and gets triggered by a BuildConfig if new images are being uploaded to the registry. In the case where a new image is uploaded, it can trigger its listeners to act. In the case of our DeploymentConfig, action would be to do a rolling update for the pods that it is meant to deploy.
+A simple ImageStream object looks like this
+
+*`imagestream.yaml`*
 ```yaml
-map_1:
-  - "map 1 item 1"
-  - "map 1 item 2"
-  - "map 1 key 1":
-      value
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  labels:
+    app: blogtest
+  name: serveimagestream
+spec:
+  lookupPolicy:
+    local: false
 ```
+
+
+## A 1-minute introduction to yaml files for humans
+
+YAML is used to describe key-value maps and arrays. You can recognize YAML file from `.yml` or `.yaml` file suffix.
+
+A YAML dataset can be
+
+1. Value
+  ```yaml
+  value
+  ```
+
+2. Array
+  ```yaml
+  - value 1
+  - value 2
+  - value 3
+  ```
+  or
+  ```yaml
+  [value 1, value 2, value 3]
+  ```
+
+3. Unordered map
+  ```yaml
+  key: value
+  ```
+  or
+  ```yaml
+  key:
+    value
+  ```
+
+Now the real kicker is: value can be a YAML dataset!
+
+```yaml
+key:
+  - value 1
+  - value 2
+  another key:
+    yet another key: value of yak
+  another keys lost sibling:
+    - more values
+  this key has one value which is array too:
+  - so indentation is not necessary here since keys often contain arrays
+```
+
+You can do multiline values:
+
+```yaml
+key: >
+  Here's a value that is written over multiple lines
+  but is actually still considered a single line until now.
+
+  Placing double newline here will result in newline in the actual data.
+```
+
+Or if you want *verbatim* kind of style:
+```yaml
+key: |
+  Now the each
+  newline is
+  treated as such so
+```
+
+For more information, take a look at https://yaml.org/.
 
 # Images
 

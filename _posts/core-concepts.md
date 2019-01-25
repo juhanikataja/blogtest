@@ -29,11 +29,97 @@ spec:
 
 * `spec.containers[0].image` is the image name that runs inside the container 0 inside the pod. Typically this is populated by openshift deployments or statefulsets.
 * `metadata.name` is the name so that the pod can be referred using, e.g., `oc`:
-  ```bash
-  oc get pods pod
-  ```
+
+    ```bash
+    oc get pods pod
+    ```
+
   Typically this is populated by openshift when pod is created automatically.
 * `metadata.labels.pool` is just an arbitrary label so that the pod can be referred by, e.g., *services*.
+
+*InitContainer* is a container in a pod that is run to completion before the
+main containers are started. Data from init containers are most easily transfered to
+the main container using volume mounts
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod
+  labels:
+    app: blogtest
+    pool: servepod
+spec:
+  volumes: 
+  - name: sharevol
+    emptyDir: {}
+  initContainers:
+  - name: perlhelper
+    image: perl
+    command:
+    - sh
+    - -c
+    - >
+      echo Hello from perl helper > /datavol/index.html
+    volumeMounts:
+    - mountPath: /datavol
+      name: sharevol
+  containers:
+  - name: serve-cont
+    image: docker-registry.default.svc:5000/openshift/httpd
+    volumeMounts:
+    - mountPath: /var/www/html
+      name: sharevol
+```
+
+Here we run init container from image perl which echoes stuff to file
+`index.html` on the shared volume. 
+
+The shared volume is defined in `spec.volumes` and "mounted" in
+`spec.initContainers.volumeMounts` and `spec.containers.volumeMounts`.
+
+*Jobs*
+
+One can also do a run-to-completion pods called 'jobs':
+
+```yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pi
+spec:
+  template:
+    spec:
+      volumes:
+      - name: smalldisk-vol
+        emptyDir: {}
+      containers:
+      - name: pi
+        image: perl
+        command:
+        - sh
+        - -c
+        - >
+          echo helloing so much here! Lets hello from /mountdata/hello.txt too: &&
+          echo hello to share volume too >> /mountdata/hello-main.txt &&
+          cat /mountdata/hello.txt
+        volumeMounts: 
+        - mountPath: /mountdata
+          name: smalldisk-vol
+      restartPolicy: Never
+      initContainers:
+      - name: init-pi
+        image: perl
+        command: 
+        - sh
+        - -c
+        - >
+          echo this hello is from the initcontainer >> /mountdata/hello.txt
+        volumeMounts: 
+        - mountPath: /mountdata
+          name: smalldisk-vol
+  backoffLimit: 4
+```
 
 **Handmade service**
 
@@ -81,7 +167,7 @@ So now we have a pod, a service and a route. But what happens if image is update
 
 For that, we can use...
 
-## Handmade DeploymentConfig
+**Handmade DeploymentConfig**
 
 DeploymentConfigs actually do more than that:
 
@@ -126,10 +212,15 @@ spec:
 
 *Hold on*! What is this imagestream object?
 
-### Excursion to ImageStream objects
+***Excursion to ImageStream objects***
 
-ImageStreams simplify image names and gets triggered by a BuildConfig if new images are being uploaded to the registry. In the case where a new image is uploaded, it can trigger its listeners to act. In the case of our DeploymentConfig, action would be to do a rolling update for the pods that it is meant to deploy.
-A simple ImageStream object looks like this
+ImageStreams simplify image names and get triggered by a BuildConfig if new
+images are being uploaded to the registry. In the case where a new image is
+uploaded, it can trigger its listeners to act. In the case of our
+DeploymentConfig, action would be to do a rolling update for the pods that it is
+meant to deploy.
+
+A simple ImageStream object looks like this:
 
 *`imagestream.yaml`*
 ```yaml
@@ -144,7 +235,6 @@ spec:
     local: false
 ```
 
-
 ## A 1-minute introduction to yaml files for humans
 
 YAML is used to describe key-value maps and arrays. You can recognize YAML file from `.yml` or `.yaml` file suffix.
@@ -152,30 +242,34 @@ YAML is used to describe key-value maps and arrays. You can recognize YAML file 
 A YAML dataset can be
 
 1. Value
-  ```yaml
-  value
-  ```
+
+    ```yaml
+    value
+    ```
 
 2. Array
-  ```yaml
-  - value 1
-  - value 2
-  - value 3
-  ```
+    ```yaml
+    - value 1
+    - value 2
+    - value 3
+    ```
   or
-  ```yaml
-  [value 1, value 2, value 3]
-  ```
+    ```yaml
+    [value 1, value 2, value 3]
+    ```
 
 3. Unordered map
-  ```yaml
-  key: value
-  ```
+    ```yaml
+    key: value
+    another_key: another value
+    ```
   or
-  ```yaml
-  key:
-    value
-  ```
+    ```yaml
+    key:
+      value
+    another_key:
+      another value
+    ```
 
 Now the real kicker is: value can be a YAML dataset!
 
@@ -211,208 +305,3 @@ key: |
 
 For more information, take a look at https://yaml.org/.
 
-# Images
-
-```mermaid
-graph LR;
-subgraph Pod
-a[Container image a];
-b[Container image b];
-c[Container image c];
-end
-a --> is_s[ImageStream ]
-```
-
-```mermaid
-graph TD;
-imagestream[ImageStream] --> buildconfig;
-subgraph Pod
-a["Container A: docker-registry.default.svc:5000/namespace/image:tag"];
-b["Container B: image:tag"];
-end
-```
-
-# Services
-
-```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: docker-registry
-spec:
-  selector:
-    docker-registry: default # all pods with docker-registry=default label are behind this svc
-  clusterIP: 173.30.136.123 # Virtual IP of service, allocated automatically
-  ports:
-  - nodePort: 0
-    port: 5000
-    protocol: TCP
-    targetPort: 5000
-  externalIPs:
-  - 192.0.1.1
-```
-
-`externalIPs` must be configured in `/etc/origin/master/master-config.yaml` by cluster admins.
-
-# Pods
-
-Straight from okd documentation:
-
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  annotations: { ... }
-  labels:                                
-    deployment: docker-registry-1
-    deploymentconfig: docker-registry
-    docker-registry: default
-  generateName: docker-registry-1-       
-spec:
-  containers:                            
-  - env:                                 
-    - name: OPENSHIFT_CA_DATA
-      value: ...
-    - name: OPENSHIFT_CERT_DATA
-      value: ...
-    - name: OPENSHIFT_INSECURE
-      value: "false"
-    - name: OPENSHIFT_KEY_DATA
-      value: ...
-    - name: OPENSHIFT_MASTER
-      value: https://master.example.com:8443
-    image: openshift/origin-docker-registry:v0.6.2 # instantiated from this image
-    imagePullPolicy: IfNotPresent
-    name: registry
-    ports: # container can bind these ports and they are made public at pod ip
-    - containerPort: 5000
-      protocol: TCP
-    resources: {}
-    securityContext: { ... } # This is weird!
-    volumeMounts:                       
-    - mountPath: /registry
-      name: registry-storage
-    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
-      name: default-token-br6yz
-      readOnly: true
-  dnsPolicy: ClusterFirst
-  imagePullSecrets:
-  - name: default-dockercfg-at06w
-  restartPolicy: Always                 
-  serviceAccount: default               
-  volumes:                              
-  - emptyDir: {}
-    name: registry-storage
-  - name: default-token-br6yz
-    secret:
-      secretName: default-token-br6yz
-```
-
-Points:
-* pods need to have unique name in the namespace
-* multiple containers in the containers array
-* can pass env variables to each of the containers
-* admins can modify this.
-
-## Init container
-
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: myapp-pod
-  labels:
-    app: myapp
-spec:
-  containers:
-  - name: myapp-container
-    image: busybox
-    command: ['sh', '-c', 'echo The app is running! && sleep 3600']
-  initContainers:
-  - name: init-myservice
-    image: busybox
-    command: ['sh', '-c', 'until nslookup myservice; do echo waiting for myservice; sleep 2; done;']
-  - name: init-mydb
-    image: busybox
-    command: ['sh', '-c', 'until nslookup mydb; do echo waiting for mydb; sleep 2; done;']
-```
-
-* init containers are run in sequence before other containers are started
-* used to, e.g., transfer initialization information through volume mounts
-
-# Routes and services
-```mermaid
-graph TD;
-a[Service 1];
-subgraph Service_1
-a --> pod_11;
-a --> pod_12;
-a --> pod_13;
-end
-dc1[DeploymentConfig] --keeps alive--> pod_11;
-dc1[DeploymentConfig] --keeps alive--> pod_12;
-dc1[DeploymentConfig] --keeps alive--> pod_13;
-dc1--listens-->is1[ImageStream];
-is1--listens-->imreg[Image registry];
-```
-
-# Builds
-
-and `BuildConfig` object:
-
-```yaml
-kind: "BuildConfig"
-apiVersion: "v1"
-metadata:
-  name: "ruby-sample-build"
-spec:
-  runPolicy: "Serial"
-  triggers:
-    -
-      type: "GitHub"
-      github:
-        secret: "secret101"
-    - type: "Generic"
-      generic:
-        secret: "secret101"
-    -
-      type: "ImageChange"
-  source:
-    git:
-      uri: "https://github.com/openshift/ruby-hello-world"
-  strategy:
-    sourceStrategy:
-      from:
-        kind: "ImageStreamTag"
-        name: "ruby-20-centos7:latest"
-  output:
-    to:
-      kind: "ImageStreamTag"
-      name: "origin-ruby-sample:latest"
-  postCommit:
-      script: "bundle exec rake test"
-```
-
-* Source can be inline Dockerfile:
-
-```yaml
-source:
-  dockerfile: |
-    FROM ...
-    LABEL maintainer="..."
-    RUN ...
-  type: Dockerfile
-```
-
-# Other similar technologies
-
-## Container clouds
-
-* Docker swarm
-* Kubernetes
-* Mesos
-
-## Container image formats
-
-* Docker
-* AppC

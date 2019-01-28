@@ -1,15 +1,54 @@
-# Simplest possible app in openshift
+# Simplified architecture of the rahti okd cluster
+
+The [OKD](https://www.okd.io) is a distribution of kubernetes (The Origin
+Community Distribution of Kubernetes that powers RedHat OpenShift). Because OKD
+is contained in RedHat's OpenShift, we might speak about Openshift and OKD
+interchangeably, but strictly speaking they are different platforms. Sometimes,
+if we get wildly colloquial, we might even abandon camel casing and say
+'openshift'!
+
+Pretty good working definition of openshift is:
+>Openshift is a multi-tenant container orchestration and management tool.
+
+Basically, what openshift does for you is that it
+
+1. Runs your container images
+2. Stores your container images
+3. Builds your container images
+4. Follows your container images
+5. Routes network traffic to your container images
+
+Openshift is managed using web dashboard or, better yet, command line tool called
+`oc`. If you've seen kuberentes, well `oc` is the openshift variant of `kubectl`.
+The web dashboard of rahti countainer cluster is located at https://rahti.csc.fi/.
+
+For storing your container images, rahti okd cluster comes along with an
+internal docker registry that is also managed using a web console or a with the
+docker's CLI tool `docker`. The registry integrated in rahti is located at http://rahti-console.csc.fi/.
+
+If you want to treat this document as a tutorial. You should play log in to 
+
+* rahti and 
+* rahti-console and
+* install `oc` tool and
+* log in to rahti with `oc`.
+
+# Simplest possible app in OKD
 
 Suppose that we have a openshift namespace `staticserve`. We want run image in the local docker registry `docker-registry.default.svc:5000/staticserve/serveimage:latest` and we'd like to expose its port 8080 at `ourservice-staticserve.rahtiapp.fi`.
 
 In simplest possible case we need
 1. Pod that runs the container
-2. Service that exposes the pod internally and gives it a predicatble name to refer
+2. Service that exposes the pod internally and gives it a predictable name to refer
 3. Route that will expose the Service in 2. to outer world and redirects `outerservice-staticserve.rahtiapp.fi` to the given service object.
 
 So lets go ahead and define the pod, service and the route manually.
 
 **Handmade pod**
+
+Pods are objects that keep given number of containers running. If a container dies for some reason, pod will automatically try to run it again.
+
+In our case, the pod will run the container image with the web server.
 
 *`pod.yaml`:*
 
@@ -160,18 +199,27 @@ spec:
     weight: 100
 ```
 
+This route will redirect traffic from internet to service in the cluster having
+with `metadata.name` being `spec.to.name`.
+
 * Currently `spec.to.kind` must be `Service`.
 * If the service `spec.to.name` has multiple ports defined then it might make sense to define `spec.port.targetport`
 
-So now we have a pod, a service and a route. But what happens if image is updated?
+----
 
-For that, we can use...
+Lets put up a simple mnemonic to remember all this:
+
+>You binary is in an image in the container started by pod named by the service announced by the route.
+
+----
+
+So now we have a pod, a service and a route. But what happens if image is updated? For that, we can use...
 
 **Handmade DeploymentConfig**
 
-DeploymentConfigs actually do more than that:
+DeploymentConfigs actually do more than just look at updating images:
 
-* They start and keep running a given number of pods defined
+* They start and keep running a given number of pods
 * They do rolling updates if images change
 
 *`deploymentconfig.yaml`*

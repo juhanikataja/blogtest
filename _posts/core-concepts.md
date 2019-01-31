@@ -1,3 +1,9 @@
+---
+title: A handmade application in openshift
+date: 2019/01/31
+updated: 2019/01/31
+---
+
 <!-- # Simplified architecture of the rahti okd cluster --> 
 <!-- The [OKD](https://www.okd.io) is a distribution of kubernetes (The Origin Community Distribution of Kubernetes that powers RedHat OpenShift). Because OKD is contained in RedHat's OpenShift, we might speak about Openshift and OKD interchangeably, but strictly speaking they are different platforms. Sometimes, if we get wildly colloquial, we might even abandon camel casing and say 'openshift'! -->
 <!--  -->
@@ -140,6 +146,8 @@ metadata:
   labels:
     app: serveapp
   name: myservice
+  annotations:
+    haproxy.router.openshift.io/ip_whitelist: 192.168.1.0/24 10.0.0.1
 spec:
   host: myservice-my-project-with-unique-name-123.rahtiapp.fi
   to:
@@ -148,10 +156,13 @@ spec:
     weight: 100
 ```
 
-This route will redirect traffic from internet to service in the cluster having with `metadata.name` being `spec.to.name`.
+This route will redirect traffic from internet to that service in the cluster whose `metadata.name` equals `spec.to.name`. 
 
-* Currently `spec.to.kind` must be `Service`.
-* If the service `spec.to.name` has multiple ports defined then it might make sense to define `spec.port.targetport`
+This particular route also allows traffic only from subnet `192.168.1.0/24` and the IP `10.0.0.1`. Security-wise it is highly encouraged to utilize ip-whitelisting. 
+
+**CAUTION**: If the whitelist entry is malformed, OpenShift will discard the whitelist and traffic is allowed from everywhere.
+
+* If the service `spec.to.name` has multiple ports defined then one should define `spec.port.targetport`
 * By default the hostname is `metadata.name` + `-` + project name + `.rahtiapp.fi` unless otherwise specified in `spec.host`.
 
 So now we have a pod, a service and a route. But what happens if the physical server where the pod happens to live is shut down or, even worse, crashes? ReplicationController object is the tool to remedy just that.
@@ -187,7 +198,7 @@ A replication controller ensures that there are `spec.replicas` number of pods r
 
 A central Kubernetes' concept known as *reconciliation* loop manifests replication controllers. Reconciliation loop is a mechanism that measures the *actual state* of the system, constructs *current state* based to the measurement of the system and performs such actions that the state of the system would equal to the *desired state*.
 
-Using such a terminology, replication controllers are objects that describe *desired state* of the cluster. Another such an object is the service object encountered earlier. There is an another reconciliation loop that compares the endpoints of the service the actual pods that are *ready* and adjusts accordingly. As a result, the endpoints of the service always point to pods that are ready and only those pods whose labels contain all the fields in the selector of the service object. In fact, everytime one sees `spec.` in a YAML representation of an object, that is a specification for a reconciliation loop. The loop for pods just happens to be tied to so called *kubelet* daemon that runs on the kubernetes node. (TODO: mikä on kubernetes node?)
+Using such a terminology, replication controllers are objects that describe *desired state* of the cluster. Another such an object is the service object encountered earlier. There is an another reconciliation loop that compares the endpoints of the service the actual pods that are *ready* and adjusts accordingly. As a result, the endpoints of the service always point to pods that are ready and only those pods whose labels contain all the fields in the selector of the service object. In fact, everytime one sees `spec.` in a YAML representation of an object, that is a specification for a reconciliation loop. The loop for pods just happens to be tied to the worker nodes of Kubernetes.
 
 ## Conclusion
 

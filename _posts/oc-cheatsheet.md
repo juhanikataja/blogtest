@@ -3,6 +3,7 @@
 **Abbreviations**
 
 Object types have abbreviations that are recognized on CLI:
+
 |Abbreviation |Meaning|
 |-----:|:-------|
 |`is`|`ImageStream`|

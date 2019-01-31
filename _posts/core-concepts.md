@@ -64,6 +64,7 @@ Using project "my-project-with-unique-name-123" on server "https://rahti.csc.fi:
 ```
 
 If there would've not been any suitable project to work in, a new one could've been created with
+
 ```bash
 $ oc new-project my-project-with-unique-name-123
 ``` 
@@ -153,7 +154,7 @@ This route will redirect traffic from internet to service in the cluster having 
 * If the service `spec.to.name` has multiple ports defined then it might make sense to define `spec.port.targetport`
 * By default the hostname is `metadata.name` + `-` + project name + `.rahtiapp.fi` unless otherwise specified in `spec.host`.
 
-So now we have a pod, a service and a route. But what happens if the physical server where the pod happens to live is shut down or, even worse, crashes? To that end there needs to be a ReplicationController object.
+So now we have a pod, a service and a route. But what happens if the physical server where the pod happens to live is shut down or, even worse, crashes? ReplicationController object is the tool to remedy just that.
 
 ## Handmade ReplicationController
 
@@ -184,9 +185,9 @@ spec:
 
 A replication controller ensures that there are `spec.replicas` number of pods running that have all the labels appearing in `spec.selector`. If there are too many, replication controller will shut down the extra and if there are too few, it will start up pods according to `spec.template` field. Actually, the template field is exactly the pod described in `pod.yaml` except the fields `apiVersion` and `kind` are missing.
 
-A central concept in Kubernetes called *reconciliation* loop manifests replication controllers. Reconciliation loop is a mechanism in Kubernetes that measures the *actual state* of the system, constructs *current state* based to the measurement of the system and performs such actions that the state of the system would equal to the *desired state*.
+A central Kubernetes' concept known as *reconciliation* loop manifests replication controllers. Reconciliation loop is a mechanism that measures the *actual state* of the system, constructs *current state* based to the measurement of the system and performs such actions that the state of the system would equal to the *desired state*.
 
-Using such a terminology, replication controllers are objects that describe *desired state* of the cluster. Another such an object is the service object encountered earlier. There is an another reconciliation loop that compares the endpoints of the service the actual pods that are *ready* and adjusts accordingly. As a result, the endpoints of the service always point to pods that are ready and only those pods whose labels contain all the fields in the selector of the service object.
+Using such a terminology, replication controllers are objects that describe *desired state* of the cluster. Another such an object is the service object encountered earlier. There is an another reconciliation loop that compares the endpoints of the service the actual pods that are *ready* and adjusts accordingly. As a result, the endpoints of the service always point to pods that are ready and only those pods whose labels contain all the fields in the selector of the service object. In fact, everytime one sees `spec.` in a YAML representation of an object, that is a specification for a reconciliation loop. The loop for pods just happens to be tied to so called *kubelet* daemon that runs on the kubernetes node. (TODO: mikä on kubernetes node?)
 
 ## Conclusion
 
@@ -384,7 +385,7 @@ The shared volume is defined in `spec.volumes` and "mounted" in `spec.initContai
 
 ## Jobs
 
-One can also do a run-to-completion pods called *Jobs*. Conceptually they are related to ReplicationControllers in the sense that they too define pod template that is to be run. However, *Jobs* are not restarted when the they finish.
+*Jobs* are in a sense run-to-completion Pods, except that they operate on the same level as ReplicationControllers, in a sense that they too define template for pod to be launched instead of directly describing the pod. The difference is, however, that *Jobs* are not restarted when they finish.
 
 ```yaml
 apiVersion: batch/v1
@@ -424,6 +425,7 @@ spec:
           name: smalldisk-vol
   backoffLimit: 4
 ```
+
 
 # A minimal introduction to YAML files
 

@@ -4,42 +4,6 @@ date: 2019/01/31
 updated: 2019/01/31
 ---
 
-<!-- # Simplified architecture of the rahti okd cluster --> 
-<!-- The [OKD](https://www.okd.io) is a distribution of kubernetes (The Origin Community Distribution of Kubernetes that powers RedHat OpenShift). Because OKD is contained in RedHat's OpenShift, we might speak about Openshift and OKD interchangeably, but strictly speaking they are different platforms. Sometimes, if we get wildly colloquial, we might even abandon camel casing and say 'openshift'! -->
-<!--  -->
-<!-- Pretty good working definition of openshift is: -->
-<!--  -->
-<!-- >Openshift is a multi-tenant container orchestration and management tool. -->
-<!--  -->
-<!-- Basically, what openshift does for you is that it -->
-<!--  -->
-<!-- 1. Runs your container images -->
-<!-- 2. Stores your container images -->
-<!-- 3. Builds your container images -->
-<!-- 4. Follows changes in your container images -->
-<!-- 5. Routes network traffic to your container images -->
-<!--  -->
-<!-- Openshift is managed using web dashboard or, better yet, command line tool called `oc`. If you've seen kuberentes, well `oc` is the openshift variant of `kubectl`. The web dashboard of rahti countainer cluster is located at https://rahti.csc.fi/. -->
-<!--  -->
-<!-- For storing your container images, rahti okd cluster comes along with an internal docker registry that is also managed using a web console or a with the docker's CLI tool `docker`. The registry integrated in rahti is located at http://rahti-console.csc.fi/. -->
-<!--  -->
-<!-- If you want to treat this document as a tutorial you should first play with -->
-<!--  -->
-<!-- * Play around with [rahti](https://rahti.csc.fi) and [rahti-console](https://rahti-console) -->
-<!-- * Install `oc` tool and -->
-<!-- * Log in to rahti with `oc`. -->
-
-<!-- ## Some basic oc commands to try -->
-<!--  -->
-<!-- 1. `oc projects` -->
-<!--  -->
-<!-- Display projects to which you have been granted access. -->
-<!--  -->
-<!-- 2. `oc status` -->
-<!--  -->
-<!-- Display status of current project. -->
-<!--  -->
-
 # Handmade app in openshift utilizing core concepts
 
 Here we walk through the core concepts of Kubernetes in the form of static http server example. We create the application only using `oc` command line tool and YAML description of its parts.
@@ -83,7 +47,7 @@ $ oc new-project my-project-with-unique-name-123 --description='csc_project: ###
 
 ## Handmade pod
 
-Pods are objects that keep given number of containers running. If a container dies for some reason, pod will automatically try to run it again.
+Pods are objects that keep given number of containers running. If a container dies for some reason, pod will automatically try to run it again. One needs keep in mind that usually pods are not created by hand except in few special cases. Instead, higher level objects (Deployments, DeploymentConfigs, etc...) are typically utilized.
 
 In our case, the pod will run the container image with the web server.
 
@@ -103,7 +67,7 @@ spec:
     image: "docker-registry.default.svc:5000/openshift/httpd"
 ```
 
-* `spec.containers[0].image` is the image name that runs inside the container 0 inside the pod. Typically this is populated by openshift deployments or statefulsets.
+Thus, this pod will run container image given in the field `spec.containers[0].image`. 
 
 * `metadata.name` is the name so that the pod can be referred using, e.g., `oc`:
 
@@ -112,6 +76,43 @@ spec:
     ```
 
 * `metadata.labels.pool` is just an arbitrary label so that the pod can be referred by, e.g., *services*.
+
+Pods and other Kubernetes/OpenShift API objects are created with the `oc` command line utility as follows:
+
+```bash
+$ oc create -f pod.yaml
+```
+
+And they are deleted using the `oc delete` command:
+
+```bash
+$ oc delete pod mypod
+```
+
+Typically one allocates *resources* to containers, but in these examples we refrain from doing that for the sake of brevity. The same pod as above with memory and cpu resources of 200MB...1GB and 0.2CPU...1CPU would read as:
+
+*`pod.yaml`*
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mypod
+  labels:
+    app: serveapp
+    pool: servepod
+spec:
+  containers:
+  - name: serve-cont
+    image: "docker-registry.default.svc:5000/openshift/httpd"
+    resources:
+      requests:
+        memory: "200M"
+        cpu: "200m"
+      limits:
+        memory: "1G"
+        cpu: "1"
+```
 
 ## Handmade service
 
@@ -167,21 +168,27 @@ This particular route also allows traffic only from subnet `192.168.1.0/24` and 
 
 So now we have a pod, a service and a route. But what happens if the physical server where the pod happens to live is shut down or, even worse, crashes? ReplicationController object is the tool to remedy just that.
 
+Or you can use ReplicaSet which is an advanced version of ReplicationController. It just support more refined pod selector semantics.
+
 ## Handmade ReplicationController
 
-*replicationcontroller.yaml*
+A ReplicationController ensures that there are `spec.replicas` number of pods running whose labels match `spec.selector.matchLabels` (or `spec.selector.matchExpression`). If there are too many, ReplicationController controller will shut down the extra and if there are too few, it will start up pods according to `spec.template` field. Actually, the template field is exactly the pod described in `pod.yaml` except the fields `apiVersion` and `kind` are missing. 
+
+*`ReplicationController.yaml`*
+
 ```yaml
 apiVersion: v1
 kind: ReplicationController
 metadata:
   labels:
     app: serveapp
-  name: serveapp-replicator
+  name: blogtest-replicator
 spec:
   replicas: 1
   selector:
-    app: serveapp
-    pool: servepod
+    matchLabels:
+      app: serveapp
+      pool: servepod
   template:
     metadata:
       name: mypod
@@ -191,14 +198,12 @@ spec:
     spec:
       containers:
       - name: serve-cont
-    image: "docker-registry.default.svc:5000/openshift/httpd"
+        image: "docker-registry.default.svc:5000/openshift/httpd"
 ```
 
-A replication controller ensures that there are `spec.replicas` number of pods running that have all the labels appearing in `spec.selector`. If there are too many, replication controller will shut down the extra and if there are too few, it will start up pods according to `spec.template` field. Actually, the template field is exactly the pod described in `pod.yaml` except the fields `apiVersion` and `kind` are missing.
+A central Kubernetes' concept coined *reconciliation loop* manifests in ReplicationController. Reconciliation loop is a mechanism that measures the *actual state* of the system, constructs *current state* based to the measurement of the system and performs such actions that the state of the system would equal to the *desired state*.
 
-A central Kubernetes' concept known as *reconciliation* loop manifests replication controllers. Reconciliation loop is a mechanism that measures the *actual state* of the system, constructs *current state* based to the measurement of the system and performs such actions that the state of the system would equal to the *desired state*.
-
-Using such a terminology, replication controllers are objects that describe *desired state* of the cluster. Another such an object is the service object encountered earlier. There is an another reconciliation loop that compares the endpoints of the service the actual pods that are *ready* and adjusts accordingly. As a result, the endpoints of the service always point to pods that are ready and only those pods whose labels contain all the fields in the selector of the service object. In fact, everytime one sees `spec.` in a YAML representation of an object, that is a specification for a reconciliation loop. The loop for pods just happens to be tied to the worker nodes of Kubernetes.
+In such a terminology, ReplicationControllers are objects that describe *desired state* of the cluster. Another such an object is the service object encountered earlier. There is an another reconciliation loop that compares the endpoints of the service the actual pods that are *ready* and adjusts accordingly. As a result, the endpoints of the service always point to pods that are ready and only those pods whose labels contain all the fields in the selector of the service object. In fact, every incidence of `spec` in a YAML representations of Kubernetes objects, describes a specification for a reconciliation loop. The loops for pods just happen to be tied to the worker nodes of Kubernetes.
 
 ## Conclusion
 
@@ -208,12 +213,11 @@ However, using Service and Route objects in the fashion described above is a suf
 
 # Handmade app using openshift extensions
 
-In this example we'll explore creating the `serveapp` using OpenShifts extensions `DeploymentConfig`, `ImageStream` and `BuildConfig`. Using these three object types, one can create 
+In this example we'll explore creating the `serveapp` using OpenShifts extensions `DeploymentConfig`, `ImageStream` and `BuildConfig`. Roughly speaking, their role in the process is this:
 
-* a ReplicationController that keeps up pods defined in the 
-    * DeploymentConfig which creates new ReplicationControllers when the
-        * ImageStream finds out a new image is uploaded into it by
-            * BuildConfig that controls building container images.
+* BuildConfig objects build container images based on source files
+* ImageStream objects that emit signals when it sees that a new image is uploaded into it by, e.g., BuildConfig
+* a DeploymentConfig objects create new ReplicationControllers based on the new images
 
 ## Handmade DeploymentConfig
 
@@ -222,7 +226,7 @@ DeploymentConfig is an object that create ReplicationControllers according to `s
 *`deploymentconfig.yaml`*
 ```yaml
 apiVersion: v1
-kind: DeploymentCOnfig
+kind: DeploymentConfig
 metadata:
   labels:
     app: serveapp
@@ -316,7 +320,7 @@ $ oc start-build serveimg-generate
 
 Persistent storage is requested from the cluster using `PersistentVolumeClaim` objects:
 
-`pvc.yaml`
+*`pvc.yaml`*:
 ```yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -332,7 +336,7 @@ spec:
 
 This will request a 1 GiB persistent storage that can be mounted in read-write mode by multiple nodes.
 
-The persistent volume can be mounted to pods as follows:
+The persistent volume can be mounted to pods with `spec.volumes` and `spec.containers.volumes`:
 
 ```yaml
 apiVersion: v1
@@ -437,76 +441,6 @@ spec:
   backoffLimit: 4
 ```
 
-
-# A minimal introduction to YAML files
-
-YAML is used to describe key-value maps and arrays. You can recognize YAML file from `.yml` or `.yaml` file suffix.
-
-A YAML dataset can be
-
-1. Value
-
-    ```yaml
-    value
-    ```
-
-2. Array
-    ```yaml
-    - value 1
-    - value 2
-    - value 3
-    ```
-    or
-    ```yaml
-    [value 1, value 2, value 3]
-    ```
-
-3. Unordered map
-    ```yaml
-    key: value
-    another_key: another value
-    ```
-    or
-    ```yaml
-    key:
-      value
-    another_key:
-      another value
-    ```
-
-Now the real kicker is: value can be a YAML dataset!
-
-```yaml
-key:
-  - value 1
-  - value 2
-  another key:
-    yet another key: value of yak
-  another keys lost sibling:
-    - more values
-  this key has one value which is array too:
-  - so indentation is not necessary here since keys often contain arrays
-```
-
-You can do multiline values:
-
-```yaml
-key: >
-  Here's a value that is written over multiple lines
-  but is actually still considered a single line until now.
-
-  Placing double newline here will result in newline in the actual data.
-```
-
-Or if you want *verbatim* kind of style:
-```yaml
-key: |
-  Now the each
-  newline is
-  treated as such so
-```
-
-For more information, see [yaml.org](https://yaml.org/).
 
 # Further reading
 

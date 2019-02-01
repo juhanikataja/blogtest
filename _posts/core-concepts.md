@@ -6,9 +6,9 @@ updated: 2019/01/31
 
 # Handmade app in openshift utilizing core concepts
 
-Here we walk through the core concepts of Kubernetes in the form of static http server example. We create the application only using `oc` command line tool and YAML description of its parts.
+Here we walk through the core concepts of Kubernetes in the form of static http server example. We create the application only using `oc` command line tool and by describing its parts in YAML.
 
-In this example, a apache http server is started from image included in openshift by default and the server is exposed at myservice-my-project-with-unique-name-123.rahtiapp.fi. Note that you need to edit the applications hostname accordingly in order to avoid name clashes.
+In this example, a apache http server is started from image included in openshift by default and the server is exposed at myservice-my-project-with-unique-name-123.rahtiapp.fi.
 
 In simplest possible case we need
 
@@ -17,7 +17,37 @@ In simplest possible case we need
 3. Route that will expose the Service in 2. to outer world and redirects
    `myservice-staticserve.rahtiapp.fi` to the given service object.
 
-So lets go ahead and define the pod, service and the route manually.
+Beware that the approach here is not actually the way OpenShift applications *should* be deployed, but instead we walk through the core concepts of OpenShift in such a way that building applications in proper way becomes more approachable. If you already know about pods, services and routes, you might be interested in the chapter **HandMade app using OpenShift extensions**.
+
+Having said that, lets go ahead and define the pod, service and the route manually.
+
+## Preparations
+
+If you are logged in to Rahti and have the OpenShift command line tool `oc` installed, you can skip this section now.
+
+Otherwise, we assume that you have a Rahti account. Install the `oc` command line tool and authenticate a command line session by logging in to rahti at https://rahti.csc.fi:8443/ and following instructions
+
+* Install `oc` command line tools by clicking the question mark -> "Command Line Tools" at up right corner of OKD console: 
+
+  ![install cli menu](img/cli-menu.png)
+
+  and click the Latest release link:
+
+  ![install cli page](img/cli-page.png)
+
+* Download and unpack correct version for your platform and make sure that the binaries are found in a directory that is in the PATH environment variable.
+
+* Copy login command by clicking here:
+
+  ![copy login](./img/copy-login.png)
+  
+  and paste the result to terminal, the result should be similar to:
+
+  ```bash
+  $  oc login https://rahti.csc.fi:8443 --token=<secret access token>
+  ```
+
+  The secret access token is valid only for limited time, so each time on starts working with `oc` tool, one needs to re-authenticate.
 
 ## Projects
 
@@ -51,7 +81,7 @@ Pods are objects that keep given number of containers running. If a container di
 
 In our case, the pod will run the container image with the web server.
 
-*`pod.yaml`:*
+*`pod.yaml`*
 
 ```yaml
 apiVersion: v1
@@ -118,7 +148,7 @@ spec:
 
 Notice that nowhere in the definition of pod there were mentions of its network identity such as IP address or hostname. That is because in Kubernetes, internal communication to pods are set up using *Service* objects:
 
-*`service.yaml`:*
+*`service.yaml`*
 ```yaml
 apiVersion: v1
 kind: Service
@@ -139,7 +169,7 @@ This service will redirect TCP traffic internally in the project to the pods hav
 
 ## Handmade route
 
-*`route.yaml`:*
+*`route.yaml`*
 ```yaml
 apiVersion: v1
 kind: Route
@@ -211,7 +241,7 @@ Creating applications using pods is useful in terms of understanding the basic c
 
 However, using Service and Route objects in the fashion described above is a sufficient design in most cases.
 
-# Handmade app using openshift extensions
+# Handmade app using OpenShift extensions
 
 In this example we'll explore creating the `serveapp` using OpenShifts extensions `DeploymentConfig`, `ImageStream` and `BuildConfig`. Roughly speaking, their role in the process is this:
 
@@ -320,7 +350,7 @@ $ oc start-build serveimg-generate
 
 Persistent storage is requested from the cluster using `PersistentVolumeClaim` objects:
 
-*`pvc.yaml`*:
+*`pvc.yaml`*
 ```yaml
 apiVersion: v1
 kind: PersistentVolumeClaim

@@ -29,17 +29,17 @@ Otherwise, we assume that you have a Rahti account. Install the `oc` command lin
 
 * Install `oc` command line tools by clicking the question mark -> "Command Line Tools" at up right corner of OKD console: 
 
-  ![install cli menu](img/cli-menu.png)
+  ![install cli menu](/img/cli-menu.png)
 
   and click the Latest release link:
 
-  ![install cli page](img/cli-page.png)
+  ![install cli page](/img/cli-page.png)
 
 * Download and unpack correct version for your platform and make sure that the binaries are found in a directory that is in the PATH environment variable.
 
 * Copy login command by clicking here:
 
-  ![copy login](./img/copy-login.png)
+  ![copy login](/img/copy-login.png)
   
   and paste the result to terminal, the result should be similar to:
 

@@ -29,17 +29,17 @@ Otherwise, we assume that you have a Rahti account. Install the `oc` command lin
 
 * Install `oc` command line tools by clicking the question mark -> "Command Line Tools" at up right corner of OKD console: 
 
-  ![install cli menu](/img/cli-menu.png)
+  ![install cli menu](img/cli-menu.png)
 
   and click the Latest release link:
 
-  ![install cli page](/img/cli-page.png)
+  ![install cli page](img/cli-page.png)
 
 * Download and unpack correct version for your platform and make sure that the binaries are found in a directory that is in the PATH environment variable.
 
 * Copy login command by clicking here:
 
-  ![copy login](/img/copy-login.png)
+  ![copy login](./img/copy-login.png)
   
   and paste the result to terminal, the result should be similar to:
 
@@ -490,9 +490,7 @@ data:
     baz=notbar
 ```
 
-The following pod imports the value of `data.prop.a` to `DATA_PROP_A`
-environment variable and creates files `data.prop.a`, `data.prop.b` and
-`data.prop.long` inside `/etc/my-config`:
+The following pod imports the value of `data.prop.a` to `DATA_PROP_A` environment variable and creates files `data.prop.a`, `data.prop.b` and `data.prop.long` inside `/etc/my-config`:
 
 *`configmap-pod.yaml`*:
 
@@ -539,8 +537,50 @@ DATA_PROP_A=hello
 
 **Secrets** behave much like ConfigMaps, but once created, they are stored in
 base64 encoded form and their contents are not displayed by default with `oc
-describe` command.
+describe` command. There is an example of a Secret in the Webhooks section.
 
+## Webhooks
+
+Rahti supports Generic, GitHub, GitLab and Bitbucket webhooks. They are particularly useful in triggering builds.
+The syntax for BuildConfig is as follows:
+
+```yaml
+spec:
+  triggers:
+  - type: GitHub
+    github:
+      SecretReference:
+        name: webhooksecret
+```
+
+Now the Secret `webhooksecret` should have
+
+```yaml
+apiVersion: v1
+kind: Secret
+data:
+  WebHookSecretKey: dGhpc19pc19hX2JhZF90b2tlbgo=    # "this_is_a_bad_token" in base64
+metadata:
+  name: webhooksecret
+  namespace: mynamespace     # set this to your project namespace
+```
+
+When the BuildConfig is configured to trigger from the webhook and the corresponding secret exists, the webhook URL can be found by using (assuming we added the webhook to `serveimg-generate`) `oc describe` command:
+
+```
+$ oc describe bc/serveimg-generate
+Name:		serveimg-generate
+.
+.
+.
+Webhook GitHub:
+	URL:	https://rahti.csc.fi:8443/apis/build.openshift.io/v1/.../<secret>/github
+.
+.
+.
+```
+
+Finally, the GitHub WebHook payload url is the url above with `<secret>` replaced with base64 decoded string of the value of `data.WebHookSecretKey` above and the content type is `application/json`.
 
 # Further reading
 

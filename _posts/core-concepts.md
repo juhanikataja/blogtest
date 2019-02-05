@@ -541,9 +541,6 @@ DATA_PROP_A=hello
 base64 encoded form and their contents are not displayed by default with `oc
 describe` command.
 
-## Webhooks
-
-Rahti supports Generic, GitHub, GitLab and Bitbucket webhooks 
 
 # Further reading
 
